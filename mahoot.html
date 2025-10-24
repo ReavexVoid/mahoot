@@ -1,0 +1,546 @@
+<!doctype html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mahoot Pro 2.0 - Fiókrendszer</title>
+<link rel="icon" href="mahooticonv1.png">
+<style>
+/* --- Alap stílusok --- */
+body {margin:0;padding:20px;font-family:'Segoe UI',sans-serif;background:#0a0f1e;color:#eef6ff;transition:0.3s;}
+body.light {background:#f5f5f5;color:#051219;}
+.wrap{max-width:1100px;margin:auto;}
+header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;}
+.btn{background:#ffcc00;color:#051219;border:none;padding:8px 12px;border-radius:6px;cursor:pointer;margin:2px;transition:0.2s;}
+.btn:hover{background:#ffd633;transform:scale(1.03);}
+.panel{background:#0f1a2b;padding:16px;border-radius:12px;margin-top:12px;box-shadow:0 4px 12px rgba(0,0,0,0.3);transition:0.3s;}
+body.light .panel {background:#fff;color:#051219;box-shadow:0 2px 8px rgba(0,0,0,0.2);}
+input,textarea,select{width:100%;padding:6px;margin-top:6px;border-radius:6px;background:#071025;border:1px solid rgba(255,255,255,0.08);color:#eef6ff;transition:0.15s;}
+body.light input,body.light textarea,body.light select {background:#f0f0f0;color:#051219;border:1px solid rgba(0,0,0,0.2);}
+input:focus,textarea:focus,select:focus{border-color:#ffcc00;outline:none;}
+.questions{margin-top:12px;}
+
+/* VÁLTOZÁS 1: A display:flex beállítást kivettem a .qcard-ból */
+.qcard{
+    padding:12px;
+    border:1px solid rgba(255,255,255,0.06);
+    margin-bottom:12px;
+    border-radius:10px;
+    background:#0c1420;
+    cursor:pointer;
+    transition:box-shadow 0.2s, transform 0.2s;
+    /* display:flex; -- KI VÉVE */
+    /* justify-content:space-between; -- KI VÉVE */ 
+    /* align-items:center; -- KI VÉVE */
+}
+body.light .qcard {background:#f9f9f9;border:1px solid rgba(0,0,0,0.1);}
+.qcard:hover{box-shadow:0 6px 18px rgba(0,0,0,0.4);transform:translateY(-2px);}
+
+/* HOZZÁADVA: Ez a stílus csak a kvízlistában lévő elemekre vonatkozik */
+.quiz-list-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.quiz-list-item:hover{
+    transform:none; /* Ne mozduljon el, mert a gombokra kattint a user */
+    box-shadow:none;
+}
+
+.choice{padding:8px;border-radius:6px;margin-top:8px;border:1px solid rgba(255,255,255,0.06);background:#071025;color:#fff;cursor:pointer;transition:transform 0.15s;}
+body.light .choice{background:#e0e0e0;color:#051219;border:1px solid rgba(0,0,0,0.1);}
+.choice:hover{transform:scale(1.01);}
+.correct{background:#00cc44 !important;color:#fff !important;}
+.wrong{background:#cc0000 !important;color:#fff !important;}
+.small{font-size:13px;color:#cfdff6;}
+.row{display:flex;gap:8px;align-items:center;}
+.codeBox{background:#061025;padding:8px;border-radius:8px;border:1px dashed rgba(255,204,0,0.2);display:flex;justify-content:space-between;align-items:center;}
+.codeInput{width:auto;padding:6px;background:#081227;border:1px solid rgba(255,255,255,0.06);color:#eef6ff;border-radius:6px;}
+#progressContainer{width:100%;background:#071025;height:12px;border-radius:6px;margin-top:12px;overflow:hidden;}
+#progressBar{height:100%;width:0%;background:#ffcc00;transition:width 0.25s ease;border-radius:6px;}
+.dragging{opacity:0.6;border:2px dashed #ffcc00;}
+#loadingOverlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.78);display:none;justify-content:center;align-items:center;z-index:9999;color:#ffcc00;font-size:20px;flex-direction:column;}
+.spinner{border:8px solid #071025;border-top:8px solid #ffcc00;border-radius:50%;width:72px;height:72px;animation:spin 1s linear infinite;margin-bottom:12px;}
+@keyframes spin{0%{transform:rotate(0deg);}100%{transform:rotate(360deg);}}
+textarea, input {color: #fff;}
+
+/* VÁLTOZÁS 2: Answer Input stílus megtartása, flex-grow-val */
+.answerInput {
+    flex-grow: 1; 
+    min-height: 80px; 
+    max-height: 300px; 
+    padding: 10px; 
+    font-size:16px; 
+    border-radius:6px; 
+    border:1px solid rgba(255,255,255,0.08); 
+    background:#081227;
+    color:#eef6ff; 
+    transition:0.15s; 
+    resize:vertical; 
+    overflow-y:auto;
+}
+.answerInput:focus{border-color:#ffcc00; outline:none;}
+
+/* Checkbox stílus helyreállítása */
+.qcard input[type="checkbox"] {
+    width: auto;
+    margin-top: 0;
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+<h1>Mahoot Pro 2.0</h1>
+<div id="accountInfo" class="small"></div>
+</header>
+
+<div class="panel" id="accountPanel">
+    <h3>Fiók kezelése</h3>
+    <button class="btn" id="createAccountBtn">Fiók létrehozása</button>
+    <button class="btn" id="logoutBtn" style="display:none">Kijelentkezés</button>
+    <button class="btn" id="deleteAccountBtn" style="display:none">Fiók törlése</button>
+    <hr style="margin-top:15px; margin-bottom:15px">
+    <div id="accountList"></div>
+</div>
+
+<div id="app" style="display:none;">
+
+    <div class="panel" id="quizListPanel">
+        <h3>Saját kvízek</h3>
+        <input id="searchQuizzes" placeholder="Keresés címre vagy címkére..." style="margin-top:6px;">
+        <div class="quiz-list" id="quizList"></div>
+        <div style="margin-top:12px">
+            <button class="btn" id="newQuizBtn">Új kvíz</button>
+            <button class="btn" id="encExportBtn">Titkosított export</button>
+            <button class="btn" id="encImportBtn">Titkosított import</button>
+            <button class="btn" id="deleteAllBtn">Összes törlése</button>
+            <button class="btn" id="toggleThemeBtn">Téma váltás</button>
+        </div>
+    </div>
+
+    <div class="panel" id="editorPanel" style="display:none">
+        <h3>Editor</h3>
+        <label>Kvíz címe</label>
+        <input id="quizTitle" placeholder="Kvíz neve...">
+        <label>Leírás</label>
+        <textarea id="quizDesc" rows="2" placeholder="Rövid leírás..."></textarea>
+        <div class="row" style="margin-top:6px">
+            <div style="flex:1">
+                <label>Mód</label>
+                <select id="quizMode">
+                    <option value="klasszikus">Klasszikus</option>
+                    <option value="igazhamis">Igaz/Hamis</option>
+                    <option value="tobbvalasztos">Többválasztós</option>
+                    <option value="rovidszoveg">Rövid szöveges</option>
+                </select>
+            </div>
+            <div style="width:180px">
+                <label>Random sorrend</label>
+                <div><input type="checkbox" id="quizRandom"> <span class="small">eng.</span></div>
+            </div>
+        </div>
+        <label>Címkék (vesszővel elválasztva)</label>
+        <input id="quizTags" placeholder="pl. matek, földrajz">
+        <div style="margin-top:10px">
+            <label>Szerkesztési kód (edit code)</label>
+            <div class="codeBox">
+                <div id="editCodeDisplay" class="small"></div>
+                <div style="display:flex;gap:8px;align-items:center">
+                    <input id="editCodeInput" class="codeInput" placeholder="Új kód...">
+                    <button class="btn" id="changeEditCodeBtn">Módosít</button>
+                    <button class="btn" id="regenEditCodeBtn" title="Véletlenszerű új kód">Új kód</button>
+                </div>
+            </div>
+            <div class="small" style="margin-top:6px">A szerkesztő gombra kattintáskor kérni fogja ezt a kódot.</div>
+        </div>
+        <div style="margin-top:12px">
+            <button class="btn" id="addQuestionBtn">+ Kérdés</button>
+            <button class="btn" id="autoSaveToggleBtn">Automatikus mentés: KI</button>
+        </div>
+        <div class="questions" id="questionsContainer"></div>
+        <div style="margin-top:12px">
+            <button class="btn" id="saveQuizBtn">Mentés</button>
+            <button class="btn" id="backToListBtn">Vissza a listához</button>
+        </div>
+    </div>
+
+    <div class="panel" id="playerPanel" style="display:none">
+        <h3 id="playerTitle"></h3>
+        <div id="playerDesc"></div>
+        <div id="progressContainer"><div id="progressBar"></div></div>
+        <div style="margin-top:8px">
+            <button class="btn" id="startQuizBtn">Lejátszás</button>
+            <button class="btn" id="stopQuizBtn" style="display:none">Megállít</button>
+            <button class="btn" id="replayQuizBtn" style="display:none">Újrajátszás</button>
+        </div>
+        <div id="playArea" style="display:none;margin-top:12px">
+            <div id="playQuestion" style="font-weight:bold;margin-bottom:8px"></div>
+            <div id="playChoices"></div>
+            <div style="margin-top:8px">
+                <span>Pontszám: <span id="playScore">0</span></span>
+                <span style="margin-left:14px">Idő: <span id="playTime">--</span>s</span>
+            </div>
+        </div>
+        <div id="summary" style="margin-top:12px"></div>
+    </div>
+</div>
+
+<div id="loadingOverlay">
+<div class="spinner"></div>
+<div id="loadingText">Betöltés...</div>
+</div>
+
+<script>
+// ======= Helper & Crypto =======
+const loadingOverlay=document.getElementById('loadingOverlay');
+const loadingText=document.getElementById('loadingText');
+function showLoading(text="Betöltés..."){ loadingText.textContent=text; loadingOverlay.style.display="flex";}
+function hideLoading(){ loadingOverlay.style.display="none";}
+async function runWithLoading(asyncFunc,text="Feldolgozás..."){ try{showLoading(text);await asyncFunc();}catch(e){alert(e.message||e);}finally{hideLoading();}}
+function makeId(len=6){ const chars='ABCDEFGHJKMNPQRSTUVWXYZ23456789'; let s=''; for(let i=0;i<len;i++) s+=chars[Math.floor(Math.random()*chars.length)]; return s;}
+function regenEditCode(){ return makeId(10); }
+
+async function encryptData(text,password){ const enc = new TextEncoder().encode(password); const key = await crypto.subtle.importKey('raw', enc, {name:'PBKDF2'}, false, ['deriveKey']); const salt = crypto.getRandomValues(new Uint8Array(16)); const derived = await crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:250000,hash:'SHA-256'},key,{name:'AES-GCM',length:256},true,['encrypt']); const data = new TextEncoder().encode(text); const iv = crypto.getRandomValues(new Uint8Array(12)); const cipher = await crypto.subtle.encrypt({name:'AES-GCM',iv},derived,data); const full = new Uint8Array(salt.length+iv.length+cipher.byteLength); full.set(salt,0); full.set(iv,salt.length); full.set(new Uint8Array(cipher),salt.length+iv.length); return btoa(String.fromCharCode(...full)); }
+async function decryptData(encText,password){ const data = Uint8Array.from(atob(encText), c=>c.charCodeAt(0)); const salt = data.slice(0,16); const iv = data.slice(16,28); const cipher = data.slice(28); const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), {name:'PBKDF2'}, false, ['deriveKey']); const derived = await crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:250000,hash:'SHA-256'},key,{name:'AES-GCM',length:256},true,['decrypt']); const plain = await crypto.subtle.decrypt({name:'AES-GCM',iv},derived,cipher); return new TextDecoder().decode(plain); }
+function escapeHtml(str){ return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+// ======= Fiókrendszer =======
+let accounts = JSON.parse(localStorage.getItem('mahoot_accounts')||'[]');
+let currentAccount = null;
+let quizzes = {}; 
+
+const accountPanel = document.getElementById('accountPanel');
+const appDiv = document.getElementById('app');
+const accountListDiv = document.getElementById('accountList');
+const accountInfoDiv = document.getElementById('accountInfo');
+const logoutBtn = document.getElementById('logoutBtn');
+const deleteAccountBtn = document.getElementById('deleteAccountBtn');
+
+function saveAccounts(){ localStorage.setItem('mahoot_accounts', JSON.stringify(accounts)); }
+
+function showAccountList(){
+    accountListDiv.innerHTML = '<h4>Válassz fiókot:</h4>';
+    if(accounts.length === 0){
+        accountListDiv.innerHTML = '<div class="small">Nincs még fiók. Hozz létre egyet!</div>';
+        document.getElementById('createAccountBtn').textContent = 'Fiók létrehozása';
+        return;
+    }
+    document.getElementById('createAccountBtn').textContent = 'Másik fiók létrehozása';
+    accounts.forEach((acc, idx)=>{
+        const div = document.createElement('div');
+        div.className = 'qcard quiz-list-item'; // HOZZÁADVA: quiz-list-item
+        div.textContent = acc.name;
+        div.onclick = ()=> loginAccount(idx);
+        accountListDiv.appendChild(div);
+    });
+    
+    // UI frissítés
+    logoutBtn.style.display = 'none';
+    deleteAccountBtn.style.display = 'none';
+    accountInfoDiv.textContent = '';
+    appDiv.style.display = 'none';
+    accountPanel.style.display = 'block';
+}
+
+function createAccount(){
+    const name = prompt('Add meg a fiók nevét:');
+    if(!name) return;
+    const id = makeId(8);
+    accounts.push({ id, name });
+    saveAccounts();
+    alert('Fiók létrehozva!');
+    showAccountList();
+}
+
+function loginAccount(idx){
+    currentAccount = accounts[idx];
+    accountInfoDiv.textContent = `Bejelentkezve: ${currentAccount.name} (${currentAccount.id})`;
+    logoutBtn.style.display = 'inline-block';
+    deleteAccountBtn.style.display = 'inline-block';
+    
+    // Kvíz adatok betöltése a fiókhoz
+    loadAccountData();
+    
+    // UI váltás
+    accountPanel.style.display = 'none';
+    appDiv.style.display = 'block';
+    refreshList(searchQuizzes.value);
+}
+
+function logoutAccount(){
+    currentAccount = null;
+    quizzes = {}; // Kvízek ürítése a biztonság kedvéért
+    showAccountList();
+}
+
+function deleteAccount(){
+    if(!currentAccount) return;
+    if(!confirm(`Törölni akarod a fiókot: ${currentAccount.name}? Ez minden kvíz adatot is töröl! (ID: ${currentAccount.id})`)) return;
+    
+    // Töröljük a fiókot és az adatait
+    const quizKey = 'quizzes_' + currentAccount.id;
+    localStorage.removeItem(quizKey);
+    accounts = accounts.filter(acc => acc.id !== currentAccount.id);
+    saveAccounts();
+    
+    alert('Fiók törölve.');
+    logoutAccount();
+}
+
+document.getElementById('createAccountBtn').onclick = createAccount;
+logoutBtn.onclick = logoutAccount;
+deleteAccountBtn.onclick = deleteAccount;
+
+
+// ======= Kvíz adat betöltés / mentés fiókhoz kötve =======
+function loadAccountData(){
+    if(!currentAccount) return;
+    const key = 'quizzes_' + currentAccount.id;
+    quizzes = JSON.parse(localStorage.getItem(key) || '{}');
+}
+
+function saveAll(){
+    if(!currentAccount) return;
+    const key = 'quizzes_' + currentAccount.id;
+    localStorage.setItem(key, JSON.stringify(quizzes));
+}
+
+// ======= UI Elements & Kvíz logika (maradék kód) =======
+let currentQuizId=null,currentQuiz=null,autoSave=false;
+const quizList=document.getElementById('quizList'), editorPanel=document.getElementById('editorPanel'), playerPanel=document.getElementById('playerPanel');
+const quizTitle=document.getElementById('quizTitle'), quizDesc=document.getElementById('quizDesc'), quizMode=document.getElementById('quizMode'), quizRandom=document.getElementById('quizRandom'), questionsContainer=document.getElementById('questionsContainer');
+const editCodeDisplay=document.getElementById('editCodeDisplay'), editCodeInput=document.getElementById('editCodeInput'), changeEditCodeBtn=document.getElementById('changeEditCodeBtn'), regenEditCodeBtn=document.getElementById('regenEditCodeBtn');
+const addQuestionBtn=document.getElementById('addQuestionBtn'), saveQuizBtn=document.getElementById('saveQuizBtn'), autoSaveToggleBtn=document.getElementById('autoSaveToggleBtn'), backToListBtn=document.getElementById('backToListBtn');
+const playerTitle=document.getElementById('playerTitle'), playerDesc=document.getElementById('playerDesc'), startQuizBtn=document.getElementById('startQuizBtn'), stopQuizBtn=document.getElementById('stopQuizBtn'), replayQuizBtn=document.getElementById('replayQuizBtn'), playArea=document.getElementById('playArea'), playQuestion=document.getElementById('playQuestion'), playChoices=document.getElementById('playChoices'), playScore=document.getElementById('playScore'), playTime=document.getElementById('playTime'), progressBar=document.getElementById('progressBar'), summary=document.getElementById('summary');
+const searchQuizzes=document.getElementById('searchQuizzes'), toggleThemeBtn=document.getElementById('toggleThemeBtn');
+
+
+// ======= Refresh Quiz List (Kész) =======
+function refreshList(filter=""){
+    if(!currentAccount) return;
+  quizList.innerHTML='';
+  const ids=Object.keys(quizzes);
+  let filtered=ids;
+  if(filter) filtered=ids.filter(id=>{
+    const q=quizzes[id];
+    return q.title.toLowerCase().includes(filter.toLowerCase())||(q.tags&&q.tags.join(',').toLowerCase().includes(filter.toLowerCase()));
+  });
+  if(filtered.length===0){ quizList.innerHTML='<div class="small">Nincs kvíz</div>'; return; }
+  filtered.forEach(id=>{
+    const q=quizzes[id];
+    const div=document.createElement('div'); div.className='qcard quiz-list-item'; // HOZZÁADVA: quiz-list-item
+    div.style.cursor='default'; 
+    const left=document.createElement('div'); left.innerHTML=`<strong>${escapeHtml(q.title)}</strong><div class="small">${escapeHtml(q.desc||'')}</div>`; div.appendChild(left);
+    const right=document.createElement('div');
+    const btnE=document.createElement('button'); btnE.className='btn'; btnE.textContent='Editor';
+    btnE.onclick=()=>{ 
+      const code=prompt(`Add meg a szerkesztési kódot a(z) "${q.title}" kvízhez:`); 
+      if(code===q.editCode){ 
+        openEditor(id); 
+      } else if(code !== null) {
+        alert('Helytelen kód! A szerkesztés megtagadva.'); 
+      }
+    };
+    const btnP=document.createElement('button'); btnP.className='btn'; btnP.textContent='Player'; btnP.onclick=()=>openPlayer(id);
+    const btnS=document.createElement('button'); btnS.className='btn'; btnS.textContent='Stats'; btnS.onclick=()=>{ alert(`Kvíz ID: ${q.id}\nCím: ${q.title}\nLegmagasabb pontszám: ${q.highScore || 0}`); };
+    const btnD=document.createElement('button'); btnD.className='btn'; btnD.textContent='Törlés'; btnD.onclick=()=>{ 
+      if(confirm(`Biztos törlöd a kvízt: ${q.title}?`)){ 
+        delete quizzes[id]; saveAll(); refreshList(searchQuizzes.value); 
+      } 
+    };
+    [btnE,btnP,btnS,btnD].forEach(b=>{ b.style.marginLeft='6px'; right.appendChild(b); }); div.appendChild(right);
+    quizList.appendChild(div);
+  });
+}
+
+// ======= Search =======
+searchQuizzes.oninput=()=>refreshList(searchQuizzes.value);
+
+// ======= Theme Toggle =======
+toggleThemeBtn.onclick=()=>document.body.classList.toggle('light');
+
+// ======= New Quiz =======
+document.getElementById('newQuizBtn').onclick=()=>{
+  if(!currentAccount) { alert('Először jelentkezz be!'); return; }
+  const id=makeId(); 
+  let editCode=prompt('Szerkesztési kód (üresen hagyva véletlenszerűen generálódik):'); 
+  if(!editCode) editCode=regenEditCode();
+  quizzes[id]={ id, title:'Új kvíz', desc:'', mode:'klasszikus', questions:[], editCode, highScore:0, random:false, tags:[] };
+  saveAll(); refreshList(searchQuizzes.value); openEditor(id);
+};
+
+// ======= Editor Functions =======
+function openEditor(id){
+  currentQuizId=id;
+  currentQuiz=JSON.parse(JSON.stringify(quizzes[id]));
+  editorPanel.style.display='block'; playerPanel.style.display='none'; document.getElementById('quizListPanel').style.display='none';
+  quizTitle.value=currentQuiz.title||''; quizDesc.value=currentQuiz.desc||''; quizMode.value=currentQuiz.mode||'klasszikus';
+  quizRandom.checked=!!currentQuiz.random;
+  document.getElementById('quizTags').value=(currentQuiz.tags||[]).join(',');
+  editCodeDisplay.textContent=currentQuiz.editCode||''; 
+  editCodeInput.value='';
+  renderQuestions();
+}
+
+function renderQuestions(){
+  questionsContainer.innerHTML='';
+  currentQuiz.questions.forEach((q,qi)=>{
+    const card=document.createElement('div'); card.className='qcard'; card.draggable=true; card.style.cursor='grab';
+    const qInput=document.createElement('input'); qInput.placeholder='Kérdés szövege...'; qInput.value=q.q||''; qInput.oninput=()=>{q.q=qInput.value;if(autoSave) saveCurrent();}; card.appendChild(qInput);
+
+    q.choices.forEach((c,ci)=>{
+      const div=document.createElement('div'); div.style.display='flex'; div.style.alignItems='center'; div.style.gap='8px'; div.style.marginTop='8px'; div.style.flex='1 1 100%'; // HOZZÁADVA: flex: 1 1 100% a sor számára, hogy kitöltse a qcard-ot
+      const checkbox=document.createElement('input'); checkbox.type='checkbox'; checkbox.checked=!!c.correct; checkbox.onchange=()=>{c.correct=checkbox.checked;if(autoSave) saveCurrent();};
+      const txt=document.createElement('textarea'); txt.value=c.text||''; txt.placeholder='Válasz szövege...'; txt.className='answerInput'; txt.oninput=()=>{c.text=txt.value;if(autoSave) saveCurrent();};
+      const removeBtn=document.createElement('button'); removeBtn.className='btn'; removeBtn.textContent='X'; removeBtn.onclick=()=>{ q.choices.splice(ci,1); renderQuestions(); if(autoSave) saveCurrent(); };
+      div.appendChild(checkbox); div.appendChild(txt); div.appendChild(removeBtn); card.appendChild(div);
+    });
+
+    const addChoiceBtn=document.createElement('button'); addChoiceBtn.className='btn'; addChoiceBtn.textContent='+ Válasz'; addChoiceBtn.style.marginTop='10px'; 
+    addChoiceBtn.onclick=()=>{ currentQuiz.questions[qi].choices.push({text:'',correct:false}); renderQuestions(); if(autoSave) saveCurrent(); }; card.appendChild(addChoiceBtn);
+
+    const dupBtn=document.createElement('button'); dupBtn.className='btn'; dupBtn.textContent='Duplikál'; dupBtn.style.marginLeft='6px';
+    dupBtn.onclick=()=>{ const clone=JSON.parse(JSON.stringify(currentQuiz.questions[qi])); currentQuiz.questions.splice(qi+1,0,clone); renderQuestions(); if(autoSave) saveCurrent(); }; card.appendChild(dupBtn);
+
+    const delBtn=document.createElement('button'); delBtn.className='btn'; delBtn.textContent='Törlés (kérdés)'; delBtn.style.marginLeft='6px';
+    delBtn.onclick=()=>{ if(confirm('Törölni a kérdést?')){ currentQuiz.questions.splice(qi,1); renderQuestions(); if(autoSave) saveCurrent(); } }; card.appendChild(delBtn);
+
+    questionsContainer.appendChild(card);
+  });
+  if(currentQuiz.questions.length===0){
+    const info=document.createElement('div'); info.className='small'; info.style.marginTop='10px'; info.textContent='Nincs még kérdés. Kattints a "+ Kérdés" gombra.'; questionsContainer.appendChild(info);
+  }
+  enableDrag(questionsContainer);
+}
+
+addQuestionBtn.onclick = ()=>{ currentQuiz.questions.push({q:'',choices:[{text:'',correct:true},{text:'',correct:false}]}); renderQuestions(); if(autoSave) saveCurrent(); };
+
+// Edit code funkciók
+changeEditCodeBtn.onclick=()=>{ 
+  const newCode=editCodeInput.value.trim(); 
+  if(!newCode){ alert('Adj meg egy kódot (nem lehet üres).'); return; } 
+  currentQuiz.editCode=newCode; 
+  editCodeDisplay.textContent=newCode; 
+  if(autoSave) saveCurrent(); 
+  alert('Szerkesztési kód módosítva!'); 
+};
+regenEditCodeBtn.onclick=()=>{ 
+  const newCode=regenEditCode(); 
+  currentQuiz.editCode=newCode; 
+  editCodeDisplay.textContent=newCode; 
+  editCodeInput.value=''; 
+  if(autoSave) saveCurrent(); 
+  alert('Új szerkesztési kód generálva!'); 
+};
+
+// Autosave
+autoSaveToggleBtn.onclick=()=>{ autoSave=!autoSave; autoSaveToggleBtn.textContent=`Automatikus mentés: ${autoSave?'BE':'KI'}`; };
+
+// Save current
+saveQuizBtn.onclick=saveCurrent;
+function saveCurrent(){ 
+  if(!currentAccount) return;
+  currentQuiz.title=quizTitle.value; 
+  currentQuiz.desc=quizDesc.value; 
+  currentQuiz.mode=quizMode.value; 
+  currentQuiz.random=quizRandom.checked; 
+  currentQuiz.tags=document.getElementById('quizTags').value.split(',').map(t=>t.trim()).filter(t=>t); 
+  quizzes[currentQuizId]=JSON.parse(JSON.stringify(currentQuiz)); 
+  saveAll(); 
+  refreshList(searchQuizzes.value); 
+  alert('Kvíz elmentve!'); 
+}
+
+backToListBtn.onclick=()=>{ editorPanel.style.display='none'; document.getElementById('quizListPanel').style.display='block'; currentQuizId=null; currentQuiz=null; };
+
+// Drag & Drop
+function enableDrag(container){
+  let dragSrc=null;
+  container.querySelectorAll('.qcard').forEach(card=>{
+    card.addEventListener('dragstart',e=>{ dragSrc=card; card.classList.add('dragging'); });
+    card.addEventListener('dragend',e=>{ card.classList.remove('dragging'); dragSrc=null; renderQuestions(); });
+    card.addEventListener('dragover',e=>{ e.preventDefault(); });
+    card.addEventListener('drop',e=>{
+      e.preventDefault();
+      if(dragSrc && dragSrc!==card){
+        const children=[...container.children];
+        const srcIndex=children.indexOf(dragSrc);
+        const tgtIndex=children.indexOf(card);
+        const tmp=currentQuiz.questions[srcIndex];
+        currentQuiz.questions.splice(srcIndex,1);
+        currentQuiz.questions.splice(tgtIndex,0,tmp);
+        renderQuestions(); if(autoSave) saveCurrent();
+      }
+    });
+  });
+}
+
+// ======= Player (Kész) =======
+function openPlayer(id){
+  const q=quizzes[id]; if(!q){ alert('Kvíz nem található'); return; }
+  playerPanel.style.display='block'; editorPanel.style.display='none'; document.getElementById('quizListPanel').style.display='none';
+  playerTitle.textContent=q.title; playerDesc.textContent=q.desc; summary.innerHTML=''; playScore.textContent='0'; playTime.textContent='--'; progressBar.style.width='0%';
+  startQuizBtn.style.display='inline-block'; stopQuizBtn.style.display='none'; replayQuizBtn.style.display='none'; playArea.style.display='none';
+  let score=0, current=0, timer=null, shuffled=[...q.questions];
+  if(q.random) shuffled.sort(()=>Math.random()-0.5);
+  
+  startQuizBtn.onclick=()=>{ playArea.style.display='block'; startQuizBtn.style.display='none'; stopQuizBtn.style.display='inline-block'; nextQuestion(); };
+  stopQuizBtn.onclick=()=>{ clearInterval(timer); playArea.style.display='none'; startQuizBtn.style.display='inline-block'; stopQuizBtn.style.display='none'; summary.innerHTML=`Megállítottad a kvízt. Pont: ${score}`; replayQuizBtn.style.display='inline-block'; };
+  replayQuizBtn.onclick=()=>openPlayer(id);
+
+  function nextQuestion(){
+    if(current>=shuffled.length){ endQuiz(); return; }
+    const qq=shuffled[current]; playQuestion.textContent=qq.q; playChoices.innerHTML='';
+    qq.choices.forEach(c=>{
+      const btn=document.createElement('div'); btn.className='choice'; btn.textContent=c.text; btn.onclick=()=>{
+        if(c.correct) score++;
+        playScore.textContent=score; current++; progressBar.style.width=`${(current/shuffled.length)*100}%`; nextQuestion();
+      }; btn.style.color='#fff'; playChoices.appendChild(btn);
+    });
+  }
+  function endQuiz(){
+    playArea.style.display='none'; stopQuizBtn.style.display='none'; startQuizBtn.style.display='inline-block'; replayQuizBtn.style.display='inline-block';
+    summary.innerHTML=`Kvíz vége! Pontszám: ${score}`; 
+    if(score>q.highScore){ q.highScore=score; saveAll(); }
+  }
+}
+
+// ======= Encryption (Kész) =======
+document.getElementById('encExportBtn').onclick=async()=>{
+  if(!currentAccount || Object.keys(quizzes).length === 0){ alert('Nincs bejelentkezett fiók vagy kvíz az exportáláshoz!'); return; }
+  const pw = prompt('Add meg a titkosítási jelszót:'); if(!pw) return;
+  await runWithLoading(async()=>{
+    const json=JSON.stringify(quizzes);
+    const enc=await encryptData(json,pw);
+    prompt('Másold ki a titkosított kvízadatokat:',enc);
+  },'Titkosítás folyamatban...');
+};
+
+document.getElementById('encImportBtn').onclick=async()=>{
+  if(!currentAccount){ alert('Először jelentkezz be egy fiókba, ahova importálni szeretnél!'); return; }
+  const enc=prompt('Illeszd be a titkosított kódot:'); if(!enc) return;
+  const pw=prompt('Add meg a titkosítási jelszót:'); if(!pw) return;
+  await runWithLoading(async()=>{
+    const dec=await decryptData(enc,pw);
+    const importedQuizzes=JSON.parse(dec); 
+    
+    // Teljes csere az importált adatokkal
+    quizzes = importedQuizzes;
+
+    saveAll(); refreshList(searchQuizzes.value); alert('Kvízek importálva!');
+  },'Importálás...');
+};
+document.getElementById('deleteAllBtn').onclick=()=>{ 
+  if(!currentAccount) { alert('Jelentkezz be!'); return; }
+  if(confirm('Biztosan törlöd az összes kvízt a fiókodban?')){ 
+    quizzes={}; saveAll(); refreshList(); 
+  } 
+};
+
+// ======= Init =======
+showAccountList();
+
+</script>
+</body>
+</html>
